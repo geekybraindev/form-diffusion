@@ -1,0 +1,12 @@
+{
+  "name": "form-diffusion",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Wes Bos-style Form Diffusion: a real accessible HTML form, restyled live by FLUX 2 Klein (img2img) via snapDOM capture.",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "engines": { "node": ">=20" }
+}

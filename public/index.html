@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Form Diffusion</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <!--
+    THE TRICK (Wes Bos "Form Diffusion"):
+    - #stage holds a <canvas> (the AI-painted video) BEHIND a real, accessible HTML form.
+    - snapDOM rasterizes #form-capture every frame -> sent to FLUX 2 Klein realtime (img2img)
+      -> the restyled frame is drawn to the canvas.
+    - The real <form> sits ON TOP, made transparent in "Overlay" mode, so it stays
+      fully keyboard-accessible and functional while LOOKING like an AI hallucination.
+  -->
+
+  <header class="toolbar" role="toolbar" aria-label="Form Diffusion controls">
+    <span class="brand">Form&nbsp;Diffusion</span>
+
+    <div class="group">
+      <button id="toggle-ai" type="button" aria-pressed="false">Start&nbsp;AI</button>
+      <button id="toggle-overlay" type="button" aria-pressed="true" title="Show/hide the real form on top">Overlay</button>
+    </div>
+
+    <label class="style-pick">
+      Style
+      <select id="style" aria-label="Diffusion style">
+        <option value="playdoh">Play-Doh</option>
+        <option value="lego">LEGO</option>
+        <option value="cyberpunk">Cyberpunk</option>
+        <option value="felt">Felt</option>
+        <option value="custom">Custom…</option>
+      </select>
+    </label>
+
+    <input id="custom-prompt" class="custom-prompt" type="text" placeholder="custom style prompt"
+           aria-label="Custom style prompt" hidden />
+
+    <span id="status" class="status" role="status" aria-live="polite">idle</span>
+    <span id="fps" class="fps" aria-hidden="true">0 fps</span>
+  </header>
+
+  <main id="stage" class="stage">
+    <!-- The AI-painted video frames land here -->
+    <canvas id="paint" width="704" height="704" aria-hidden="true"></canvas>
+
+    <!-- The REAL form. #form-capture is what snapDOM rasterizes each frame. -->
+    <section id="form-capture" class="card" aria-label="Sign up form">
+      <form id="signup" novalidate>
+        <h1>Sign Up</h1>
+        <p class="sub">Create your account</p>
+
+        <label for="name">Name</label>
+        <input id="name" name="name" type="text" autocomplete="name" placeholder="Ada Lovelace" required />
+
+        <label for="email">Email</label>
+        <input id="email" name="email" type="email" autocomplete="email" placeholder="ada@example.com" required />
+
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" autocomplete="new-password" placeholder="••••••••" required minlength="8" />
+
+        <button class="submit" type="submit">Create account</button>
+
+        <p class="legal">By signing up you agree to the <a href="#">Terms</a>.</p>
+        <p id="form-msg" class="form-msg" role="status" aria-live="polite"></p>
+      </form>
+    </section>
+  </main>
+
+  <!-- snapDOM (DOM -> image). Pinned. Falls back to local copy if CDN blocked. -->
+  <script type="module">
+    // Try CDN first; if it fails, the app.js fallback note kicks in.
+    window.__snapdomReady = (async () => {
+      try {
+        const m = await import('https://cdn.jsdelivr.net/npm/@zumer/snapdom@latest/dist/snapdom.mjs');
+        window.snapdom = m.snapdom || m.default || m;
+        return true;
+      } catch (e) {
+        console.warn('snapDOM CDN import failed:', e);
+        return false;
+      }
+    })();
+  </script>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

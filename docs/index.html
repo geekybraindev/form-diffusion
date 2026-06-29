@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Form Diffusion</title>
+<style>
+  :root{--bg:#0b0d12;--card:#11151c;--ink:#e8edf4;--muted:#8a93a3;--accent:#6cd8ff;--line:#222a36;--ok:#27d07f;--err:#ff6b6b}
+  *{box-sizing:border-box}html,body{margin:0;height:100%}
+  body{background:var(--bg);color:var(--ink);font:15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;display:flex;flex-direction:column}
+  .toolbar{display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid var(--line);background:rgba(12,15,20,.9);backdrop-filter:blur(8px);flex-wrap:wrap}
+  .brand{font-weight:700;letter-spacing:.3px}
+  .group{display:flex;gap:8px}
+  .toolbar button,.toolbar select,.toolbar input{background:#171c25;color:var(--ink);border:1px solid var(--line);border-radius:9px;padding:7px 12px;font-size:14px;cursor:pointer}
+  .toolbar input{cursor:text}
+  .toolbar button[aria-pressed="true"]{border-color:var(--accent);color:var(--accent)}
+  #toggle-ai[aria-pressed="true"]{background:var(--accent);color:#04212b;border-color:var(--accent);font-weight:700}
+  .style-pick{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:13px}
+  .custom-prompt{min-width:200px}
+  .status{margin-left:auto;color:var(--muted);font-size:13px;min-width:150px;text-align:right}
+  .fps{color:var(--muted);font-size:12px;width:54px;text-align:right;font-variant-numeric:tabular-nums}
+  .stage{position:relative;flex:1;display:grid;place-items:center;padding:32px;overflow:hidden;background:radial-gradient(1200px 600px at 50% -10%,#14202c 0,transparent 60%),var(--bg)}
+  #paint{position:absolute;inset:0;margin:auto;width:min(92vmin,720px);height:min(92vmin,720px);border-radius:18px;box-shadow:0 30px 80px rgba(0,0,0,.55);opacity:0;transition:opacity .4s;pointer-events:none}
+  .stage.ai-on #paint{opacity:1}
+  .card{position:relative;z-index:2;width:min(92vmin,420px);background:var(--card);border:1px solid var(--line);border-radius:18px;padding:30px 28px;box-shadow:0 20px 60px rgba(0,0,0,.5);transition:opacity .25s,box-shadow .25s}
+  .stage.overlay-on.ai-on .card{background:transparent;border-color:transparent;box-shadow:none}
+  .stage.overlay-on.ai-on .card label,.stage.overlay-on.ai-on .card .sub,.stage.overlay-on.ai-on .card .legal,.stage.overlay-on.ai-on .card h1{opacity:.04}
+  .stage.overlay-on.ai-on .card input{background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.12);color:#fff}
+  .stage.overlay-on.ai-on .card input:focus{background:rgba(0,0,0,.35);border-color:var(--accent)}
+  .card h1{margin:0 0 2px;font-size:24px}.card .sub{margin:0 0 18px;color:var(--muted)}
+  .card label{display:block;margin:12px 0 5px;font-size:13px;color:var(--muted)}
+  .card input{width:100%;padding:11px 12px;border-radius:10px;border:1px solid var(--line);background:#0d1219;color:var(--ink);font-size:15px}
+  .card input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(108,216,255,.15)}
+  .submit{width:100%;margin-top:18px;padding:12px;border:0;border-radius:11px;background:var(--accent);color:#04212b;font-weight:700;font-size:15px;cursor:pointer}
+  .submit:hover{filter:brightness(1.06)}
+  .legal{margin:14px 0 0;font-size:12px;color:var(--muted)}.legal a{color:var(--accent)}
+  .form-msg{margin:10px 0 0;font-size:13px;min-height:18px}.form-msg.ok{color:var(--ok)}.form-msg.err{color:var(--err)}
+  /* key gate */
+  .gate{position:fixed;inset:0;z-index:50;display:grid;place-items:center;background:rgba(6,8,12,.92);backdrop-filter:blur(6px)}
+  .gate.hidden{display:none}
+  .gate .box{width:min(92vw,440px);background:var(--card);border:1px solid var(--line);border-radius:16px;padding:26px}
+  .gate h2{margin:0 0 6px;font-size:20px}.gate p{margin:0 0 16px;color:var(--muted);font-size:14px}
+  .gate input{width:100%;padding:11px 12px;border-radius:10px;border:1px solid var(--line);background:#0d1219;color:var(--ink);font-size:14px}
+  .gate .row{display:flex;gap:8px;margin-top:14px}
+  .gate button{flex:1;padding:11px;border:0;border-radius:10px;background:var(--accent);color:#04212b;font-weight:700;cursor:pointer}
+  .gate .ghost{background:#171c25;color:var(--ink);border:1px solid var(--line)}
+  .gate .hint{margin-top:12px;font-size:12px;color:var(--muted)}.gate a{color:var(--accent)}
+  .keybtn{font-size:12px;color:var(--muted);background:none;border:0;cursor:pointer;text-decoration:underline}
+</style>
+</head>
+<body>
+<header class="toolbar" role="toolbar" aria-label="Form Diffusion controls">
+  <span class="brand">Form&nbsp;Diffusion</span>
+  <div class="group">
+    <button id="toggle-ai" type="button" aria-pressed="false">Start&nbsp;AI</button>
+    <button id="toggle-overlay" type="button" aria-pressed="true" title="Show/hide the real form on top">Overlay</button>
+  </div>
+  <label class="style-pick">Style
+    <select id="style" aria-label="Diffusion style">
+      <option value="playdoh">Play-Doh</option>
+      <option value="lego">LEGO</option>
+      <option value="cyberpunk">Cyberpunk</option>
+      <option value="felt">Felt</option>
+      <option value="custom">Custom…</option>
+    </select>
+  </label>
+  <input id="custom-prompt" class="custom-prompt" type="text" placeholder="custom style prompt" aria-label="Custom style prompt" hidden />
+  <span id="status" class="status" role="status" aria-live="polite">idle</span>
+  <span id="fps" class="fps" aria-hidden="true">0 fps</span>
+</header>
+
+<main id="stage" class="stage">
+  <canvas id="paint" width="704" height="704" aria-hidden="true"></canvas>
+  <section id="form-capture" class="card" aria-label="Sign up form">
+    <form id="signup" novalidate>
+      <h1>Sign Up</h1>
+      <p class="sub">Create your account</p>
+      <label for="name">Name</label>
+      <input id="name" name="name" type="text" autocomplete="name" placeholder="Ada Lovelace" required />
+      <label for="email">Email</label>
+      <input id="email" name="email" type="email" autocomplete="email" placeholder="ada@example.com" required />
+      <label for="password">Password</label>
+      <input id="password" name="password" type="password" autocomplete="new-password" placeholder="••••••••" required minlength="8" />
+      <button class="submit" type="submit">Create account</button>
+      <p class="legal">By signing up you agree to the <a href="#">Terms</a>.</p>
+      <p id="form-msg" class="form-msg" role="status" aria-live="polite"></p>
+    </form>
+  </section>
+</main>
+
+<!-- Key gate: collected at runtime, stored ONLY in this browser's localStorage. Never committed. -->
+<div id="gate" class="gate">
+  <div class="box">
+    <h2>Connect your fal.ai key</h2>
+    <p>This runs FLUX 2 Klein on fal's cloud GPUs. Paste your key — it's saved only in <b>this browser</b> (localStorage) and sent straight to fal, never to anyone else.</p>
+    <input id="key-input" type="password" placeholder="fal key  (id:secret)" autocomplete="off" />
+    <div class="row">
+      <button id="key-save">Save &amp; start</button>
+      <button id="key-demo" class="ghost" type="button">Skip (demo: capture only)</button>
+    </div>
+    <p class="hint">Get one at <a href="https://fal.ai/dashboard/keys" target="_blank" rel="noopener">fal.ai/dashboard/keys</a>. Tip: set a spend cap in billing. ~$0.00194/compute-sec.</p>
+  </div>
+</div>
+
+<script type="module">
+const STYLE_PROMPTS={
+  playdoh:'Turn this sign-up form into a scene sculpted entirely from colorful Play-Doh modeling clay, soft fingerprints, squishy rounded letters, studio light',
+  lego:'Turn this sign-up form into LEGO bricks and minifigure parts, glossy plastic studs, snap-together panels, toy photography',
+  cyberpunk:'Turn this sign-up form into a neon cyberpunk holographic interface, glowing magenta and cyan, rain-slick chrome, Blade Runner UI',
+  felt:'Turn this sign-up form into hand-stitched felt and wool craft, soft fuzzy fabric letters, visible thread, warm cozy lighting',
+};
+const $=id=>document.getElementById(id);
+const els={stage:$('stage'),canvas:$('paint'),capture:$('form-capture'),toggleAI:$('toggle-ai'),overlay:$('toggle-overlay'),
+  style:$('style'),custom:$('custom-prompt'),status:$('status'),fps:$('fps'),form:$('signup'),formMsg:$('form-msg'),
+  gate:$('gate'),keyInput:$('key-input'),keySave:$('key-save'),keyDemo:$('key-demo')};
+const ctx=els.canvas.getContext('2d');
+const LS_KEY='fd_fal_key';
+
+let snapdom=null, fal=null, running=false, connection=null, mode='demo';
+let frames=0,lastFpsT=performance.now(),inFlight=false, falKey=localStorage.getItem(LS_KEY)||'';
+
+// load libs from CDN (snapDOM always; fal only when needed)
+async function loadSnapdom(){
+  if(!snapdom){const m=await import('https://cdn.jsdelivr.net/npm/@zumer/snapdom@latest/dist/snapdom.mjs');snapdom=m.snapdom||m.default||m;}
+}
+async function loadFal(){
+  if(!fal){const m=await import('https://esm.sh/@fal-ai/client');fal=m.fal;}
+}
+function setStatus(t){els.status.textContent=t;}
+function currentPrompt(){return els.style.value==='custom'?(els.custom.value.trim()||STYLE_PROMPTS.playdoh):(STYLE_PROMPTS[els.style.value]||STYLE_PROMPTS.playdoh);}
+
+async function captureFrame(){
+  const result=await snapdom(els.capture,{scale:1,backgroundColor:'#11151c'});
+  const src=await result.toCanvas();
+  const off=document.createElement('canvas');off.width=704;off.height=704;
+  const o=off.getContext('2d');o.fillStyle='#11151c';o.fillRect(0,0,704,704);
+  const s=Math.min(704/src.width,704/src.height),w=src.width*s,h=src.height*s;
+  o.drawImage(src,(704-w)/2,(704-h)/2,w,h);
+  return off.toDataURL('image/jpeg',0.5);
+}
+function paint(s){const img=new Image();img.onload=()=>ctx.drawImage(img,0,0,704,704);img.src=s.startsWith('data:')?s:'data:image/jpeg;base64,'+s;}
+function tickFps(){frames++;const n=performance.now();if(n-lastFpsT>=1000){els.fps.textContent=frames+' fps';frames=0;lastFpsT=n;}}
+
+async function startLive(){
+  await loadFal();
+  fal.config({credentials:falKey});
+  connection=fal.realtime.connect('fal-ai/flux-2/klein/realtime',{
+    connectionKey:'form-diffusion',throttleInterval:64,
+    onResult:r=>{inFlight=false;const im=r?.images?.[0];if(im?.content)paint(im.content);tickFps();},
+    onError:e=>{inFlight=false;console.error('fal error',e);setStatus('error — check key / console');},
+  });
+  setStatus('live · streaming');
+  const loop=async()=>{
+    if(!running)return;
+    if(!inFlight){try{const image_url=await captureFrame();inFlight=true;
+      connection.send({image_url,prompt:currentPrompt(),num_inference_steps:3,image_size:'square',output_feedback_strength:0.9,sync_mode:true});
+    }catch(e){console.error(e);setStatus('capture failed');}}
+    requestAnimationFrame(loop);
+  };loop();
+}
+async function startDemo(){
+  setStatus('demo · capture only (add key for AI paint)');
+  const tick=async()=>{if(!running)return;try{paint(await captureFrame());tickFps();setStatus('demo · showing raw capture');}catch(e){console.error(e);}};
+  tick();const iv=setInterval(()=>{if(!running)return clearInterval(iv);tick();},2000);
+}
+
+async function start(){
+  await loadSnapdom();
+  running=true;els.stage.classList.add('ai-on');
+  els.toggleAI.setAttribute('aria-pressed','true');els.toggleAI.textContent='Stop AI';
+  if(mode==='live'&&falKey)startLive();else startDemo();
+}
+function stop(){running=false;els.stage.classList.remove('ai-on');
+  els.toggleAI.setAttribute('aria-pressed','false');els.toggleAI.textContent='Start AI';
+  setStatus('idle');els.fps.textContent='0 fps';
+  if(connection?.close){try{connection.close();}catch(_){}connection=null;}}
+
+// gate
+function showGate(){els.gate.classList.remove('hidden');}
+function hideGate(){els.gate.classList.add('hidden');}
+els.keySave.addEventListener('click',()=>{const k=els.keyInput.value.trim();if(!k)return;falKey=k;localStorage.setItem(LS_KEY,k);mode='live';hideGate();start();});
+els.keyDemo.addEventListener('click',()=>{mode='demo';hideGate();start();});
+els.keyInput.addEventListener('keydown',e=>{if(e.key==='Enter')els.keySave.click();});
+
+// toolbar
+els.toggleAI.addEventListener('click',()=>{if(running){stop();return;}
+  if(falKey){mode='live';start();}else showGate();});
+els.overlay.addEventListener('click',()=>{const on=els.overlay.getAttribute('aria-pressed')!=='true';
+  els.overlay.setAttribute('aria-pressed',String(on));els.stage.classList.toggle('overlay-on',on);});
+els.style.addEventListener('change',()=>{els.custom.hidden=els.style.value!=='custom';});
+els.stage.classList.add('overlay-on');
+
+// a "key" link in the toolbar to change/forget the key
+const kb=document.createElement('button');kb.className='keybtn';kb.textContent=falKey?'change key':'add key';
+kb.style.marginLeft='6px';kb.addEventListener('click',()=>{els.keyInput.value=falKey;showGate();});
+els.toggleAI.parentElement.appendChild(kb);
+
+// the form really works
+els.form.addEventListener('submit',e=>{e.preventDefault();const d=new FormData(els.form);
+  if(!d.get('name')||!d.get('email')||String(d.get('password')).length<8){els.formMsg.textContent='Please complete all fields (password 8+ chars).';els.formMsg.className='form-msg err';return;}
+  els.formMsg.textContent=`Welcome, ${d.get('name')}! (real submit — the AI is only skin-deep)`;els.formMsg.className='form-msg ok';});
+
+// boot: if no key yet, leave gate up; else hide and wait for Start
+if(falKey){hideGate();setStatus('ready — press Start AI');kb.textContent='change key';}
+else{setStatus('add your fal key to begin');}
+</script>
+</body>
+</html>
