@@ -67,11 +67,17 @@ async function captureFrame() {
   return off.toDataURL('image/jpeg', 0.5); // 50% quality per fal perf guidance
 }
 
+let _lastBlobUrl = null;
 function paint(dataUrlOrBytes) {
   const img = new Image();
-  img.onload = () => ctx.drawImage(img, 0, 0, 704, 704);
+  img.onload = () => { ctx.drawImage(img, 0, 0, 704, 704); if (_lastBlobUrl) { URL.revokeObjectURL(_lastBlobUrl); _lastBlobUrl = null; } };
   if (typeof dataUrlOrBytes === 'string') {
     img.src = dataUrlOrBytes.startsWith('data:') ? dataUrlOrBytes : 'data:image/jpeg;base64,' + dataUrlOrBytes;
+  } else {
+    // fal realtime returns a Uint8Array of raw JPEG bytes
+    const bytes = dataUrlOrBytes instanceof ArrayBuffer ? new Uint8Array(dataUrlOrBytes) : dataUrlOrBytes;
+    const url = URL.createObjectURL(new Blob([bytes], { type: 'image/jpeg' }));
+    _lastBlobUrl = url; img.src = url;
   }
 }
 function tickFps() {

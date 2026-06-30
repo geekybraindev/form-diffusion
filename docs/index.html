@@ -139,7 +139,19 @@ async function captureFrame(){
   o.drawImage(src,(704-w)/2,(704-h)/2,w,h);
   return off.toDataURL('image/jpeg',0.5);
 }
-function paint(s){const img=new Image();img.onload=()=>ctx.drawImage(img,0,0,704,704);img.src=s.startsWith('data:')?s:'data:image/jpeg;base64,'+s;}
+// fal realtime returns image bytes as a Uint8Array (raw JPEG); also handle base64 string + data URL.
+let _lastBlobUrl=null;
+function paint(content){
+  const img=new Image();
+  img.onload=()=>{ctx.drawImage(img,0,0,704,704); if(_lastBlobUrl){URL.revokeObjectURL(_lastBlobUrl);_lastBlobUrl=null;}};
+  if(typeof content==='string'){
+    img.src=content.startsWith('data:')?content:'data:image/jpeg;base64,'+content;
+  }else{
+    const bytes=content instanceof ArrayBuffer?new Uint8Array(content):content; // Uint8Array
+    const url=URL.createObjectURL(new Blob([bytes],{type:'image/jpeg'}));
+    _lastBlobUrl=url; img.src=url;
+  }
+}
 function tickFps(){frames++;const n=performance.now();if(n-lastFpsT>=1000){els.fps.textContent=frames+' fps';frames=0;lastFpsT=n;}}
 
 async function startLive(){
