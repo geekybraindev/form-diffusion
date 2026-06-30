@@ -119,9 +119,10 @@ const LS_KEY='fd_fal_key';
 let snapdom=null, fal=null, running=false, connection=null, mode='demo';
 let frames=0,lastFpsT=performance.now(),inFlight=false, falKey=localStorage.getItem(LS_KEY)||'';
 
-// load libs from CDN (snapDOM always; fal only when needed)
+// load libs from CDN (snapDOM always; fal only when needed). esm.sh is reliable;
+// jsdelivr's @latest path for snapDOM has been hanging, so we use esm.sh for both.
 async function loadSnapdom(){
-  if(!snapdom){const m=await import('https://cdn.jsdelivr.net/npm/@zumer/snapdom@latest/dist/snapdom.mjs');snapdom=m.snapdom||m.default||m;}
+  if(!snapdom){const m=await import('https://esm.sh/@zumer/snapdom');snapdom=m.snapdom||m.default||m;}
 }
 async function loadFal(){
   if(!fal){const m=await import('https://esm.sh/@fal-ai/client');fal=m.fal;}
@@ -165,7 +166,18 @@ async function startDemo(){
 }
 
 async function start(){
-  await loadSnapdom();
+  setStatus('loading…');
+  try{
+    // guard against a hung CDN import so we never silently freeze
+    await Promise.race([
+      loadSnapdom(),
+      new Promise((_,rej)=>setTimeout(()=>rej(new Error('snapDOM load timed out (CDN). Check connection / try reload.')),12000)),
+    ]);
+  }catch(e){
+    console.error(e);
+    setStatus('⚠ '+e.message);
+    return; // stay in idle, button unchanged
+  }
   running=true;els.stage.classList.add('ai-on');
   els.toggleAI.setAttribute('aria-pressed','true');els.toggleAI.textContent='Stop AI';
   if(mode==='live'&&falKey)startLive();else startDemo();

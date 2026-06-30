@@ -74,7 +74,7 @@
     // Try CDN first; if it fails, the app.js fallback note kicks in.
     window.__snapdomReady = (async () => {
       try {
-        const m = await import('https://cdn.jsdelivr.net/npm/@zumer/snapdom@latest/dist/snapdom.mjs');
+        const m = await import('https://esm.sh/@zumer/snapdom');
         window.snapdom = m.snapdom || m.default || m;
         return true;
       } catch (e) {

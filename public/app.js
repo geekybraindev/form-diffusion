@@ -85,7 +85,7 @@ function tickFps() {
 
 // ---- LIVE MODE: fal realtime websocket ----
 async function startLive() {
-  const { fal } = await import('https://cdn.jsdelivr.net/npm/@fal-ai/client@latest/+esm');
+  const { fal } = await import('https://esm.sh/@fal-ai/client');
   fal.config({ proxyUrl: '/api/fal/proxy' });
   connection = fal.realtime.connect('fal-ai/flux-2/klein/realtime', {
     connectionKey: 'form-diffusion',
