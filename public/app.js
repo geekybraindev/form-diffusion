@@ -106,12 +106,17 @@ async function startLive() {
   });
 
   setStatus('live · streaming');
+  // Paced loop: setTimeout (not tight rAF) so low-power machines keep a responsive UI.
+  let sentAt = 0, capCost = 0;
   const loop = async () => {
     if (!running) return;
-    if (!inFlight) {
+    if (inFlight && Date.now() - sentAt > 6000) { inFlight = false; console.warn('fal result timeout — resetting'); }
+    if (!inFlight && !document.hidden) {
       try {
+        const t0 = performance.now();
         const image_url = await captureFrame();
-        inFlight = true;
+        capCost = performance.now() - t0;
+        inFlight = true; sentAt = Date.now();
         connection.send({
           image_url,
           prompt: currentPrompt(),
@@ -122,7 +127,7 @@ async function startLive() {
         });
       } catch (e) { console.error(e); setStatus('capture failed'); }
     }
-    requestAnimationFrame(loop);
+    setTimeout(loop, Math.max(90, capCost));
   };
   loop();
 }

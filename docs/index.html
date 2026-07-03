@@ -163,12 +163,25 @@ async function startLive(){
     onError:e=>{inFlight=false;console.error('fal error',e);setStatus('error — check key / console');},
   });
   setStatus('live · streaming');
+  // Paced loop (low-power friendly): setTimeout instead of tight rAF so the UI
+  // always gets main-thread time. Capture cost is measured and the gap adapts —
+  // slow machines automatically capture less often instead of freezing.
+  let sentAt=0, capCost=0;
   const loop=async()=>{
     if(!running)return;
-    if(!inFlight){try{const image_url=await captureFrame();inFlight=true;
-      connection.send({image_url,prompt:currentPrompt(),num_inference_steps:3,image_size:'square',output_feedback_strength:0.9,sync_mode:true});
-    }catch(e){console.error(e);setStatus('capture failed');}}
-    requestAnimationFrame(loop);
+    // watchdog: if a fal message was dropped, don't deadlock — reset after 6s
+    if(inFlight && Date.now()-sentAt>6000){inFlight=false;console.warn('fal result timeout — resetting');}
+    if(!inFlight && !document.hidden){
+      try{
+        const t0=performance.now();
+        const image_url=await captureFrame();
+        capCost=performance.now()-t0;
+        inFlight=true; sentAt=Date.now();
+        connection.send({image_url,prompt:currentPrompt(),num_inference_steps:3,image_size:'square',output_feedback_strength:0.9,sync_mode:true});
+      }catch(e){console.error(e);setStatus('capture failed');}
+    }
+    // breathe: at least 90ms idle, and never busier than 50% duty on slow machines
+    setTimeout(loop, Math.max(90, capCost));
   };loop();
 }
 async function startDemo(){
