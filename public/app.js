@@ -97,20 +97,30 @@ async function startLive() {
     connectionKey: 'form-diffusion',
     throttleInterval: 64,
     onResult: (result) => {
-      inFlight = false;
+      inFlight = false; misses = 0;
       const im = result?.images?.[0];
-      if (im?.content) paint(im.content);
+      if (im?.content) { paint(im.content); if (els.status.textContent !== 'live · streaming') setStatus('live · streaming'); }
       tickFps();
     },
-    onError: (e) => { inFlight = false; console.error('fal error', e); setStatus('error — see console'); },
+    onError: (e) => { inFlight = false; console.error('fal error', e); },
   });
 
   setStatus('live · streaming');
   // Paced loop: setTimeout (not tight rAF) so low-power machines keep a responsive UI.
-  let sentAt = 0, capCost = 0;
+  let sentAt = 0, capCost = 0, misses = 0;
   const loop = async () => {
     if (!running) return;
-    if (inFlight && Date.now() - sentAt > 6000) { inFlight = false; console.warn('fal result timeout — resetting'); }
+    // watchdog: normal klein results land in <1s. 6s of nothing means the socket is
+    // open-but-dead (the fal client only reconnects on *close*, never on a silent
+    // stall — verified against @fal-ai/client 1.10.1). close() forces the next send
+    // to re-auth with a fresh token and open a new socket.
+    if (inFlight && Date.now() - sentAt > 6000) {
+      inFlight = false; misses++;
+      console.warn('fal result timeout #' + misses + ' — closing stalled connection, will reconnect on next frame');
+      setStatus('stream stalled — reconnecting…');
+      try { connection.close(); } catch (_) {}
+      if (misses >= 3) setStatus('⚠ reconnects not helping — check FAL_KEY / credits at fal.ai');
+    }
     if (!inFlight && !document.hidden) {
       try {
         const t0 = performance.now();

@@ -159,8 +159,8 @@ async function startLive(){
   fal.config({credentials:falKey});
   connection=fal.realtime.connect('fal-ai/flux-2/klein/realtime',{
     connectionKey:'form-diffusion',throttleInterval:64,
-    onResult:r=>{inFlight=false;misses=0;const im=r?.images?.[0];if(im?.content){paint(im.content);if(els.status.textContent.startsWith('⚠'))setStatus('live · streaming');}tickFps();},
-    onError:e=>{inFlight=false;console.error('fal error',e);setStatus('error — check key / console');},
+    onResult:r=>{inFlight=false;misses=0;const im=r?.images?.[0];if(im?.content){paint(im.content);if(els.status.textContent!=='live · streaming')setStatus('live · streaming');}tickFps();},
+    onError:e=>{inFlight=false;console.error('fal error',e);},
   });
   setStatus('live · streaming');
   // Paced loop (low-power friendly): setTimeout instead of tight rAF so the UI
@@ -169,11 +169,16 @@ async function startLive(){
   let sentAt=0, capCost=0, misses=0;
   const loop=async()=>{
     if(!running)return;
-    // watchdog: if a fal message was dropped, don't deadlock — reset after 6s
+    // watchdog: normal klein results land in <1s. 6s of nothing means the socket
+    // is open-but-dead (the fal client only reconnects on *close*, never on a
+    // silent stall — verified against @fal-ai/client 1.10.1). close() forces the
+    // next send to re-auth with a fresh token and open a new socket.
     if(inFlight && Date.now()-sentAt>6000){
       inFlight=false; misses++;
-      console.warn('fal result timeout #'+misses);
-      if(misses>=2) setStatus('⚠ no frames returning — key invalid/revoked or out of credits. Use "change key".');
+      console.warn('fal result timeout #'+misses+' — closing stalled connection, will reconnect on next frame');
+      setStatus('stream stalled — reconnecting…');
+      try{connection.close();}catch(_){}
+      if(misses>=3) setStatus('⚠ reconnects not helping — check key/credits at fal.ai, or "change key".');
     }
     if(!inFlight && !document.hidden){
       try{
