@@ -129,13 +129,20 @@ const LS_KEY='fd_fal_key';
 let snapdom=null, fal=null, running=false, connection=null, mode='demo';
 let frames=0,lastFpsT=performance.now(),inFlight=false, falKey=localStorage.getItem(LS_KEY)||'';
 
-// load libs from CDN (snapDOM always; fal only when needed). esm.sh is reliable;
-// jsdelivr's @latest path for snapDOM has been hanging, so we use esm.sh for both.
+// libs: self-hosted vendor bundles first (CDN loads are blocked on some of
+// Evan's devices), esm.sh as fallback.
+async function importFirst(sources){
+  let lastErr;
+  for(const src of sources){
+    try{return await import(src);}catch(e){lastErr=e;console.warn('import failed from',src,e);}
+  }
+  throw lastErr;
+}
 async function loadSnapdom(){
-  if(!snapdom){const m=await import('https://esm.sh/@zumer/snapdom');snapdom=m.snapdom||m.default||m;}
+  if(!snapdom){const m=await importFirst(['./vendor/snapdom.mjs','https://esm.sh/@zumer/snapdom']);snapdom=m.snapdom||m.default||m;}
 }
 async function loadFal(){
-  if(!fal){const m=await import('https://esm.sh/@fal-ai/client');fal=m.fal;}
+  if(!fal){const m=await importFirst(['./vendor/fal-client.mjs','https://esm.sh/@fal-ai/client']);fal=m.fal;}
 }
 function setStatus(t){els.status.textContent=t;}
 // Klein is an instruction-editing model: naming the exact labels is what keeps

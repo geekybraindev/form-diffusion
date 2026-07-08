@@ -21,25 +21,39 @@ const els = {
   fps:      document.getElementById('fps'),
   form:     document.getElementById('signup'),
   formMsg:  document.getElementById('form-msg'),
+  gate:     document.getElementById('gate'),
+  keyInput: document.getElementById('key-input'),
+  keySave:  document.getElementById('key-save'),
+  keyDemo:  document.getElementById('key-demo'),
 };
 const ctx = els.canvas.getContext('2d');
+const LS_KEY = 'fd_fal_key';
 
 let running = false;
 let connection = null;       // fal realtime connection (live mode)
-let mode = 'unknown';        // 'live' | 'demo'
+let mode = 'unknown';        // 'live-proxy' | 'live-direct' | 'demo'
 let frames = 0, lastFpsT = performance.now();
 let inFlight = false;
+let falKey = localStorage.getItem(LS_KEY) || '';   // only used when the server has no key
 
-// ---- config probe: does the backend expose a fal proxy/token? ----
+// Self-hosted first — CDN loads are blocked on some of Evan's devices.
+async function importFal() {
+  for (const src of ['/vendor/fal-client.mjs', 'https://esm.sh/@fal-ai/client']) {
+    try { return (await import(src)).fal; } catch (e) { console.warn('fal client import failed from', src, e); }
+  }
+  throw new Error('could not load the fal client (vendor + CDN both failed)');
+}
+
+// ---- config probe: server proxy key > browser key > demo ----
 async function detectMode() {
   try {
     const r = await fetch('/api/config', { cache: 'no-store' });
     if (r.ok) {
       const cfg = await r.json();
-      if (cfg.hasFalKey) return 'live';
+      if (cfg.hasFalKey) return 'live-proxy';
     }
   } catch (_) {}
-  return 'demo';
+  return falKey ? 'live-direct' : 'demo';
 }
 
 // Appended to every prompt. Klein is an instruction-editing model: naming the
@@ -108,8 +122,17 @@ function tickFps() {
 
 // ---- LIVE MODE: fal realtime websocket ----
 async function startLive() {
-  const { fal } = await import('https://esm.sh/@fal-ai/client');
-  fal.config({ proxyUrl: '/api/fal/proxy' });
+  let fal;
+  try {
+    fal = await importFal();
+  } catch (e) {
+    console.error(e);
+    setStatus('⚠ ' + e.message);
+    return;
+  }
+  // proxy mode keeps the key on the server; direct mode uses the browser key
+  if (mode === 'live-proxy') fal.config({ proxyUrl: '/api/fal/proxy' });
+  else fal.config({ credentials: falKey });
   connection = fal.realtime.connect('fal-ai/flux-2/klein/realtime', {
     connectionKey: 'form-diffusion',
     throttleInterval: 64,
@@ -195,12 +218,14 @@ async function startDemo() {
 }
 
 async function start() {
+  mode = await detectMode();
+  // No server key and no browser key: ask for one instead of silently demoing.
+  if (mode === 'demo' && !gateDismissed) { showGate(); return; }
   running = true;
   els.stage.classList.add('ai-on');
   els.toggleAI.setAttribute('aria-pressed', 'true');
   els.toggleAI.textContent = 'Stop AI';
-  mode = await detectMode();
-  if (mode === 'live') startLive(); else startDemo();
+  if (mode.startsWith('live')) startLive(); else startDemo();
 }
 function stop() {
   running = false;
@@ -211,6 +236,19 @@ function stop() {
   els.fps.textContent = '0 fps';
   if (connection?.close) { try { connection.close(); } catch (_) {} connection = null; }
 }
+
+// ---- key gate (only reachable when the server has no FAL_KEY) ----
+let gateDismissed = false;
+function showGate() { els.gate.classList.remove('hidden'); }
+function hideGate() { els.gate.classList.add('hidden'); }
+els.keySave.addEventListener('click', () => {
+  const k = els.keyInput.value.trim();
+  if (!k) return;
+  falKey = k; localStorage.setItem(LS_KEY, k);
+  hideGate(); start();
+});
+els.keyDemo.addEventListener('click', () => { gateDismissed = true; hideGate(); start(); });
+els.keyInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') els.keySave.click(); });
 
 // ---- wiring ----
 els.toggleAI.addEventListener('click', () => running ? stop() : start());

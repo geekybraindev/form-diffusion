@@ -113,6 +113,20 @@ body{
 .form-msg.ok{color:var(--ok)}
 .form-msg.err{color:var(--err)}
 
+/* ---------- key gate (shown only when the server has no FAL_KEY) ---------- */
+.gate{position:fixed;inset:0;z-index:50;display:grid;place-items:center;background:rgba(6,8,12,.92);backdrop-filter:blur(6px)}
+.gate.hidden{display:none}
+.gate .box{width:min(92vw,440px);background:var(--card);border:1px solid var(--line);border-radius:16px;padding:26px}
+.gate h2{margin:0 0 6px;font-size:20px}
+.gate p{margin:0 0 16px;color:var(--muted);font-size:14px}
+.gate input{width:100%;padding:11px 12px;border-radius:10px;border:1px solid var(--line);background:#0d1219;color:var(--ink);font-size:14px}
+.gate .row{display:flex;gap:8px;margin-top:14px}
+.gate button{flex:1;padding:11px;border:0;border-radius:10px;background:var(--accent);color:#04212b;font-weight:700;cursor:pointer}
+.gate .ghost{background:#171c25;color:var(--ink);border:1px solid var(--line)}
+.gate .hint{margin-top:12px;font-size:12px;color:var(--muted)}
+.gate a{color:var(--accent)}
+.keybtn{font-size:12px;color:var(--muted);background:none;border:0;cursor:pointer;text-decoration:underline}
+
 @media (prefers-reduced-motion: reduce){
   #paint{transition:none}
 }
