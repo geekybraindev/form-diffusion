@@ -110,11 +110,13 @@ async function startLive() {
   let sentAt = 0, capCost = 0, misses = 0;
   const loop = async () => {
     if (!running) return;
-    // watchdog: normal klein results land in <1s. 6s of nothing means the socket is
-    // open-but-dead (the fal client only reconnects on *close*, never on a silent
-    // stall — verified against @fal-ai/client 1.10.1). close() forces the next send
-    // to re-auth with a fresh token and open a new socket.
-    if (inFlight && Date.now() - sentAt > 6000) {
+    // watchdog: normal klein results land in <500ms. 3s of nothing means the
+    // connection is gone: fal recycles realtime sockets every ~31s with a code-1000
+    // close (no onError fires for 1000), and occasionally hands out sockets that
+    // open but never respond. The fal client only reconnects on *close*, never on
+    // a silent stall (verified against @fal-ai/client 1.10.1) — close() forces the
+    // next send to re-auth with a fresh token and open a new socket (~250ms).
+    if (inFlight && Date.now() - sentAt > 3000) {
       inFlight = false; misses++;
       console.warn('fal result timeout #' + misses + ' — closing stalled connection, will reconnect on next frame');
       setStatus('stream stalled — reconnecting…');
