@@ -35,16 +35,31 @@
       </select>
     </label>
 
-    <input id="custom-prompt" class="custom-prompt" type="text" placeholder="custom style prompt"
-           aria-label="Custom style prompt" hidden />
+    <input id="custom-prompt" class="custom-prompt" type="text" placeholder="theme, e.g. sushi · coral reef · steampunk brass"
+           aria-label="Custom style theme" hidden />
 
     <span id="status" class="status" role="status" aria-live="polite">idle</span>
     <span id="fps" class="fps" aria-hidden="true">0 fps</span>
   </header>
 
+  <!-- Key gate: only shown when the server has no FAL_KEY. The key is kept in
+       this browser's localStorage and sent straight to fal — never to anyone else. -->
+  <div id="gate" class="gate hidden">
+    <div class="box">
+      <h2>Connect your fal.ai key</h2>
+      <p>The local server has no <code>FAL_KEY</code>, so paste one here — it's saved only in <b>this browser</b> (localStorage) and sent straight to fal.</p>
+      <input id="key-input" type="password" placeholder="fal key  (id:secret)" autocomplete="off" />
+      <div class="row">
+        <button id="key-save">Save &amp; start</button>
+        <button id="key-demo" class="ghost" type="button">Skip (demo: capture only)</button>
+      </div>
+      <p class="hint">Get one at <a href="https://fal.ai/dashboard/keys" target="_blank" rel="noopener">fal.ai/dashboard/keys</a>. Tip: set a spend cap in billing.</p>
+    </div>
+  </div>
+
   <main id="stage" class="stage">
     <!-- The AI-painted video frames land here -->
-    <canvas id="paint" width="704" height="704" aria-hidden="true"></canvas>
+    <canvas id="paint" width="1024" height="1024" aria-hidden="true"></canvas>
 
     <!-- The REAL form. #form-capture is what snapDOM rasterizes each frame. -->
     <section id="form-capture" class="card" aria-label="Sign up form">
@@ -69,18 +84,18 @@
     </section>
   </main>
 
-  <!-- snapDOM (DOM -> image). Pinned. Falls back to local copy if CDN blocked. -->
+  <!-- snapDOM (DOM -> image). Self-hosted first — CDN loads are blocked on some
+       of Evan's devices — with esm.sh as a fallback. -->
   <script type="module">
-    // Try CDN first; if it fails, the app.js fallback note kicks in.
     window.__snapdomReady = (async () => {
-      try {
-        const m = await import('https://esm.sh/@zumer/snapdom');
-        window.snapdom = m.snapdom || m.default || m;
-        return true;
-      } catch (e) {
-        console.warn('snapDOM CDN import failed:', e);
-        return false;
+      for (const src of ['/vendor/snapdom.mjs', 'https://esm.sh/@zumer/snapdom']) {
+        try {
+          const m = await import(src);
+          window.snapdom = m.snapdom || m.default || m;
+          return true;
+        } catch (e) { console.warn('snapDOM import failed from', src, e); }
       }
+      return false;
     })();
   </script>
   <script type="module" src="./app.js"></script>

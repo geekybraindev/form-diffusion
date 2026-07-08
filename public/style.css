@@ -57,6 +57,14 @@ body{
 }
 .stage.ai-on #paint{opacity:1}
 
+/* Compare mode: AI is on but the overlay illusion is off — show the REAL form
+   beside the AI paint instead of stacked on top of it, so both are visible. */
+.stage.ai-on:not(.overlay-on){display:flex;align-items:center;justify-content:center;gap:32px;flex-wrap:wrap}
+.stage.ai-on:not(.overlay-on) #paint{
+  position:static;margin:0;
+  width:min(60vmin,560px);height:min(60vmin,560px);
+}
+
 /* ---------- the real card/form ---------- */
 .card{
   position:relative;z-index:2;
@@ -68,23 +76,23 @@ body{
   box-shadow:0 20px 60px rgba(0,0,0,.5);
   transition:opacity .25s ease, box-shadow .25s ease;
 }
-/* Overlay mode: real form turns mostly transparent so the AI paint shows,
-   but inputs stay fully interactive & keyboard-focusable. */
-.stage.overlay-on.ai-on .card{
-  background:transparent;border-color:transparent;box-shadow:none;
-}
-.stage.overlay-on.ai-on .card label,
+/* Overlay mode: the AI paint sits ON TOP of the real form (canvas is
+   pointer-events:none, so clicks and typing pass straight through). The form
+   stays at FULL opacity underneath — completely hidden from the user, but
+   every snapDOM capture feeds the model a crisp, fully-legible frame, which
+   is what keeps the AI's lettering coherent. */
+.stage.overlay-on.ai-on #paint{z-index:3}
+/* Capture skin: while the canvas covers the form, restyle it high-contrast
+   (light panel, white inputs, dark labels) — the user never sees this, but the
+   model needs unambiguous panel/field/button shapes or it paints floating
+   words with no form structure. */
+.stage.overlay-on.ai-on .card{background:#e9edf3;border-color:#aab3c0}
+.stage.overlay-on.ai-on .card h1,
+.stage.overlay-on.ai-on .card label{color:#141a22}
 .stage.overlay-on.ai-on .card .sub,
-.stage.overlay-on.ai-on .card .legal,
-.stage.overlay-on.ai-on .card h1{
-  opacity:.04;   /* nearly invisible but still rendered for snapDOM + a11y tree */
-}
-.stage.overlay-on.ai-on .card input{
-  background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.12);color:#fff;
-}
-.stage.overlay-on.ai-on .card input:focus{
-  background:rgba(0,0,0,.35);border-color:var(--accent);
-}
+.stage.overlay-on.ai-on .card .legal{color:#3c4654}
+.stage.overlay-on.ai-on .card input{background:#fff;border-color:#7c8899;color:#10151c}
+.stage.overlay-on.ai-on .card .submit{background:#1d7fe0;color:#fff}
 
 .card h1{margin:0 0 2px;font-size:24px}
 .card .sub{margin:0 0 18px;color:var(--muted)}
@@ -104,6 +112,20 @@ body{
 .form-msg{margin:10px 0 0;font-size:13px;min-height:18px}
 .form-msg.ok{color:var(--ok)}
 .form-msg.err{color:var(--err)}
+
+/* ---------- key gate (shown only when the server has no FAL_KEY) ---------- */
+.gate{position:fixed;inset:0;z-index:50;display:grid;place-items:center;background:rgba(6,8,12,.92);backdrop-filter:blur(6px)}
+.gate.hidden{display:none}
+.gate .box{width:min(92vw,440px);background:var(--card);border:1px solid var(--line);border-radius:16px;padding:26px}
+.gate h2{margin:0 0 6px;font-size:20px}
+.gate p{margin:0 0 16px;color:var(--muted);font-size:14px}
+.gate input{width:100%;padding:11px 12px;border-radius:10px;border:1px solid var(--line);background:#0d1219;color:var(--ink);font-size:14px}
+.gate .row{display:flex;gap:8px;margin-top:14px}
+.gate button{flex:1;padding:11px;border:0;border-radius:10px;background:var(--accent);color:#04212b;font-weight:700;cursor:pointer}
+.gate .ghost{background:#171c25;color:var(--ink);border:1px solid var(--line)}
+.gate .hint{margin-top:12px;font-size:12px;color:var(--muted)}
+.gate a{color:var(--accent)}
+.keybtn{font-size:12px;color:var(--muted);background:none;border:0;cursor:pointer;text-decoration:underline}
 
 @media (prefers-reduced-motion: reduce){
   #paint{transition:none}
