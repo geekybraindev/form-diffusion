@@ -159,18 +159,22 @@ async function startLive(){
   fal.config({credentials:falKey});
   connection=fal.realtime.connect('fal-ai/flux-2/klein/realtime',{
     connectionKey:'form-diffusion',throttleInterval:64,
-    onResult:r=>{inFlight=false;const im=r?.images?.[0];if(im?.content)paint(im.content);tickFps();},
+    onResult:r=>{inFlight=false;misses=0;const im=r?.images?.[0];if(im?.content){paint(im.content);if(els.status.textContent.startsWith('⚠'))setStatus('live · streaming');}tickFps();},
     onError:e=>{inFlight=false;console.error('fal error',e);setStatus('error — check key / console');},
   });
   setStatus('live · streaming');
   // Paced loop (low-power friendly): setTimeout instead of tight rAF so the UI
   // always gets main-thread time. Capture cost is measured and the gap adapts —
   // slow machines automatically capture less often instead of freezing.
-  let sentAt=0, capCost=0;
+  let sentAt=0, capCost=0, misses=0;
   const loop=async()=>{
     if(!running)return;
     // watchdog: if a fal message was dropped, don't deadlock — reset after 6s
-    if(inFlight && Date.now()-sentAt>6000){inFlight=false;console.warn('fal result timeout — resetting');}
+    if(inFlight && Date.now()-sentAt>6000){
+      inFlight=false; misses++;
+      console.warn('fal result timeout #'+misses);
+      if(misses>=2) setStatus('⚠ no frames returning — key invalid/revoked or out of credits. Use "change key".');
+    }
     if(!inFlight && !document.hidden){
       try{
         const t0=performance.now();
