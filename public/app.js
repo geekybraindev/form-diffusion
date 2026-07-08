@@ -42,35 +42,52 @@ async function detectMode() {
   return 'demo';
 }
 
+// Appended to every prompt. Klein is an instruction-editing model: naming the
+// exact labels is what keeps its lettering legible — without this the text
+// melts into alphabet soup (A/B-tested against the live endpoint, 2026-07-08).
+const COHERENCE = ' Keep the exact same layout with the panel, the three input boxes and the button clearly visible. Every text label must remain exactly as written and clearly legible: "Sign Up", "Name", "Email", "Password", "Create account".';
+
 function currentPrompt() {
-  if (els.style.value === 'custom') return els.custom.value.trim() || STYLE_PROMPTS.playdoh;
-  return STYLE_PROMPTS[els.style.value] || STYLE_PROMPTS.playdoh;
+  if (els.style.value === 'custom') {
+    const theme = els.custom.value.trim();
+    // A bare theme word ("sushi") only decorates AROUND the form; wrapping it in
+    // the restyle instruction makes the form BE the theme.
+    if (theme) return `Turn this sign-up form into a scene made entirely of ${theme} — restyle the panel, input fields and button in that theme.` + COHERENCE;
+    return STYLE_PROMPTS.playdoh + COHERENCE;
+  }
+  return (STYLE_PROMPTS[els.style.value] || STYLE_PROMPTS.playdoh) + COHERENCE;
 }
 function setStatus(t) { els.status.textContent = t; }
 
-// ---- capture the real form to a 704x704 JPEG data URI ----
+// 1024 matches fal's square_hd output — capturing at the model's native size
+// keeps small letterforms sharp end to end.
+const SIZE = 1024;
+
+// ---- capture the real form to a SIZE x SIZE JPEG data URI ----
 async function captureFrame() {
   const ok = await window.__snapdomReady;
   if (!ok || !window.snapdom) throw new Error('snapDOM unavailable');
-  // snapdom(el) -> result with toCanvas/toPng; we render to an offscreen canvas at 704.
-  const result = await window.snapdom(els.capture, { scale: 1, backgroundColor: '#11151c' });
+  // scale 2 = crisp letterforms; the letterbox tone must CONTRAST the dark card
+  // (same-color letterboxing made the panel invisible to the model — it painted
+  // floating words with no form structure).
+  const result = await window.snapdom(els.capture, { scale: 2, backgroundColor: '#606a78' });
   const srcCanvas = await result.toCanvas();
   const off = document.createElement('canvas');
-  off.width = 704; off.height = 704;
+  off.width = SIZE; off.height = SIZE;
   const octx = off.getContext('2d');
-  octx.fillStyle = '#11151c';
-  octx.fillRect(0, 0, 704, 704);
+  octx.fillStyle = '#606a78';
+  octx.fillRect(0, 0, SIZE, SIZE);
   // letterbox the form into a square
-  const s = Math.min(704 / srcCanvas.width, 704 / srcCanvas.height);
+  const s = Math.min(SIZE / srcCanvas.width, SIZE / srcCanvas.height);
   const w = srcCanvas.width * s, h = srcCanvas.height * s;
-  octx.drawImage(srcCanvas, (704 - w) / 2, (704 - h) / 2, w, h);
+  octx.drawImage(srcCanvas, (SIZE - w) / 2, (SIZE - h) / 2, w, h);
   return off.toDataURL('image/jpeg', 0.5); // 50% quality per fal perf guidance
 }
 
 let _lastBlobUrl = null;
 function paint(dataUrlOrBytes) {
   const img = new Image();
-  img.onload = () => { ctx.drawImage(img, 0, 0, 704, 704); if (_lastBlobUrl) { URL.revokeObjectURL(_lastBlobUrl); _lastBlobUrl = null; } };
+  img.onload = () => { ctx.drawImage(img, 0, 0, SIZE, SIZE); if (_lastBlobUrl) { URL.revokeObjectURL(_lastBlobUrl); _lastBlobUrl = null; } };
   if (typeof dataUrlOrBytes === 'string') {
     img.src = dataUrlOrBytes.startsWith('data:') ? dataUrlOrBytes : 'data:image/jpeg;base64,' + dataUrlOrBytes;
   } else {
@@ -132,8 +149,11 @@ async function startLive() {
         connection.send({
           image_url,
           prompt: currentPrompt(),
-          num_inference_steps: 3,
-          image_size: 'square',
+          // steps 4 + square_hd + fixed seed: best text legibility in the
+          // 2026-07-08 param sweep, still <400ms/frame warm.
+          num_inference_steps: 4,
+          image_size: 'square_hd',
+          seed: 35,
           output_feedback_strength: 0.9,
           sync_mode: true,
         });

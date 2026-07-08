@@ -22,11 +22,21 @@
   .stage{position:relative;flex:1;display:grid;place-items:center;padding:32px;overflow:hidden;background:radial-gradient(1200px 600px at 50% -10%,#14202c 0,transparent 60%),var(--bg)}
   #paint{position:absolute;inset:0;margin:auto;width:min(92vmin,720px);height:min(92vmin,720px);border-radius:18px;box-shadow:0 30px 80px rgba(0,0,0,.55);opacity:0;transition:opacity .4s;pointer-events:none}
   .stage.ai-on #paint{opacity:1}
+  /* compare mode: AI on, overlay off -> real form sits BESIDE the AI paint */
+  .stage.ai-on:not(.overlay-on){display:flex;align-items:center;justify-content:center;gap:32px;flex-wrap:wrap}
+  .stage.ai-on:not(.overlay-on) #paint{position:static;margin:0;width:min(60vmin,560px);height:min(60vmin,560px)}
   .card{position:relative;z-index:2;width:min(92vmin,420px);background:var(--card);border:1px solid var(--line);border-radius:18px;padding:30px 28px;box-shadow:0 20px 60px rgba(0,0,0,.5);transition:opacity .25s,box-shadow .25s}
-  .stage.overlay-on.ai-on .card{background:transparent;border-color:transparent;box-shadow:none}
-  .stage.overlay-on.ai-on .card label,.stage.overlay-on.ai-on .card .sub,.stage.overlay-on.ai-on .card .legal,.stage.overlay-on.ai-on .card h1{opacity:.04}
-  .stage.overlay-on.ai-on .card input{background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.12);color:#fff}
-  .stage.overlay-on.ai-on .card input:focus{background:rgba(0,0,0,.35);border-color:var(--accent)}
+  /* overlay mode: AI paint covers the real form (canvas is pointer-events:none so
+     interaction passes through); form stays full-opacity underneath so snapDOM
+     feeds the model a crisp frame — that's what keeps the AI lettering coherent */
+  .stage.overlay-on.ai-on #paint{z-index:3}
+  /* capture skin: user never sees this (canvas covers it) but the model needs
+     unambiguous panel/field/button shapes or it paints floating words */
+  .stage.overlay-on.ai-on .card{background:#e9edf3;border-color:#aab3c0}
+  .stage.overlay-on.ai-on .card h1,.stage.overlay-on.ai-on .card label{color:#141a22}
+  .stage.overlay-on.ai-on .card .sub,.stage.overlay-on.ai-on .card .legal{color:#3c4654}
+  .stage.overlay-on.ai-on .card input{background:#fff;border-color:#7c8899;color:#10151c}
+  .stage.overlay-on.ai-on .card .submit{background:#1d7fe0;color:#fff}
   .card h1{margin:0 0 2px;font-size:24px}.card .sub{margin:0 0 18px;color:var(--muted)}
   .card label{display:block;margin:12px 0 5px;font-size:13px;color:var(--muted)}
   .card input{width:100%;padding:11px 12px;border-radius:10px;border:1px solid var(--line);background:#0d1219;color:var(--ink);font-size:15px}
@@ -64,13 +74,13 @@
       <option value="custom">Custom…</option>
     </select>
   </label>
-  <input id="custom-prompt" class="custom-prompt" type="text" placeholder="custom style prompt" aria-label="Custom style prompt" hidden />
+  <input id="custom-prompt" class="custom-prompt" type="text" placeholder="theme, e.g. sushi · coral reef · steampunk brass" aria-label="Custom style theme" hidden />
   <span id="status" class="status" role="status" aria-live="polite">idle</span>
   <span id="fps" class="fps" aria-hidden="true">0 fps</span>
 </header>
 
 <main id="stage" class="stage">
-  <canvas id="paint" width="704" height="704" aria-hidden="true"></canvas>
+  <canvas id="paint" width="1024" height="1024" aria-hidden="true"></canvas>
   <section id="form-capture" class="card" aria-label="Sign up form">
     <form id="signup" novalidate>
       <h1>Sign Up</h1>
@@ -128,22 +138,37 @@ async function loadFal(){
   if(!fal){const m=await import('https://esm.sh/@fal-ai/client');fal=m.fal;}
 }
 function setStatus(t){els.status.textContent=t;}
-function currentPrompt(){return els.style.value==='custom'?(els.custom.value.trim()||STYLE_PROMPTS.playdoh):(STYLE_PROMPTS[els.style.value]||STYLE_PROMPTS.playdoh);}
+// Klein is an instruction-editing model: naming the exact labels is what keeps
+// its lettering legible (A/B-tested against the live endpoint, 2026-07-08).
+const COHERENCE=' Keep the exact same layout with the panel, the three input boxes and the button clearly visible. Every text label must remain exactly as written and clearly legible: "Sign Up", "Name", "Email", "Password", "Create account".';
+function currentPrompt(){
+  if(els.style.value==='custom'){
+    const theme=els.custom.value.trim();
+    // a bare theme word only decorates AROUND the form; the wrap makes the form BE the theme
+    if(theme)return `Turn this sign-up form into a scene made entirely of ${theme} — restyle the panel, input fields and button in that theme.`+COHERENCE;
+    return STYLE_PROMPTS.playdoh+COHERENCE;
+  }
+  return (STYLE_PROMPTS[els.style.value]||STYLE_PROMPTS.playdoh)+COHERENCE;
+}
 
+// 1024 matches fal's square_hd output — native-size capture keeps letterforms sharp.
+const SIZE=1024;
 async function captureFrame(){
-  const result=await snapdom(els.capture,{scale:1,backgroundColor:'#11151c'});
+  // scale 2 = crisp letterforms; letterbox tone must CONTRAST the dark card or
+  // the model can't see the panel and paints floating words with no structure
+  const result=await snapdom(els.capture,{scale:2,backgroundColor:'#606a78'});
   const src=await result.toCanvas();
-  const off=document.createElement('canvas');off.width=704;off.height=704;
-  const o=off.getContext('2d');o.fillStyle='#11151c';o.fillRect(0,0,704,704);
-  const s=Math.min(704/src.width,704/src.height),w=src.width*s,h=src.height*s;
-  o.drawImage(src,(704-w)/2,(704-h)/2,w,h);
+  const off=document.createElement('canvas');off.width=SIZE;off.height=SIZE;
+  const o=off.getContext('2d');o.fillStyle='#606a78';o.fillRect(0,0,SIZE,SIZE);
+  const s=Math.min(SIZE/src.width,SIZE/src.height),w=src.width*s,h=src.height*s;
+  o.drawImage(src,(SIZE-w)/2,(SIZE-h)/2,w,h);
   return off.toDataURL('image/jpeg',0.5);
 }
 // fal realtime returns image bytes as a Uint8Array (raw JPEG); also handle base64 string + data URL.
 let _lastBlobUrl=null;
 function paint(content){
   const img=new Image();
-  img.onload=()=>{ctx.drawImage(img,0,0,704,704); if(_lastBlobUrl){URL.revokeObjectURL(_lastBlobUrl);_lastBlobUrl=null;}};
+  img.onload=()=>{ctx.drawImage(img,0,0,SIZE,SIZE); if(_lastBlobUrl){URL.revokeObjectURL(_lastBlobUrl);_lastBlobUrl=null;}};
   if(typeof content==='string'){
     img.src=content.startsWith('data:')?content:'data:image/jpeg;base64,'+content;
   }else{
@@ -188,7 +213,8 @@ async function startLive(){
         const image_url=await captureFrame();
         capCost=performance.now()-t0;
         inFlight=true; sentAt=Date.now();
-        connection.send({image_url,prompt:currentPrompt(),num_inference_steps:3,image_size:'square',output_feedback_strength:0.9,sync_mode:true});
+        // steps 4 + square_hd + fixed seed: best text legibility in the 2026-07-08 sweep, <400ms warm
+        connection.send({image_url,prompt:currentPrompt(),num_inference_steps:4,image_size:'square_hd',seed:35,output_feedback_strength:0.9,sync_mode:true});
       }catch(e){console.error(e);setStatus('capture failed');}
     }
     // breathe: at least 90ms idle, and never busier than 50% duty on slow machines

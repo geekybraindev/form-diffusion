@@ -35,8 +35,8 @@
       </select>
     </label>
 
-    <input id="custom-prompt" class="custom-prompt" type="text" placeholder="custom style prompt"
-           aria-label="Custom style prompt" hidden />
+    <input id="custom-prompt" class="custom-prompt" type="text" placeholder="theme, e.g. sushi · coral reef · steampunk brass"
+           aria-label="Custom style theme" hidden />
 
     <span id="status" class="status" role="status" aria-live="polite">idle</span>
     <span id="fps" class="fps" aria-hidden="true">0 fps</span>
@@ -44,7 +44,7 @@
 
   <main id="stage" class="stage">
     <!-- The AI-painted video frames land here -->
-    <canvas id="paint" width="704" height="704" aria-hidden="true"></canvas>
+    <canvas id="paint" width="1024" height="1024" aria-hidden="true"></canvas>
 
     <!-- The REAL form. #form-capture is what snapDOM rasterizes each frame. -->
     <section id="form-capture" class="card" aria-label="Sign up form">
